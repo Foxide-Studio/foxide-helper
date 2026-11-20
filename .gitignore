@@ -1,0 +1,9 @@
+obj/
+*.exe
+*.exe.old
+*.exe.new
+*.ini
+FoxideHelper.crashes/
+FoxideHelper.stats/
+__pycache__/
+dist/
