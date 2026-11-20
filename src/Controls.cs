@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Drawing.Drawing2D;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Windows.Forms;
 
 namespace FoxideDisk
@@ -40,7 +41,7 @@ namespace FoxideDisk
         }
         protected static void DrawT(Graphics g, string s, Font f, Rectangle r, Color c, TextFormatFlags flags)
         {
-            TextRenderer.DrawText(g, s, f, r, c, flags | TextFormatFlags.NoPadding);
+            TextRenderer.DrawText(g, s, f, r, c, flags | TextFormatFlags.NoPadding | TextFormatFlags.NoPrefix);
         }
         protected const TextFormatFlags LeftMid = TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.EndEllipsis | TextFormatFlags.SingleLine;
         protected const TextFormatFlags CenterMid = TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine;
@@ -385,6 +386,11 @@ namespace FoxideDisk
             if (Kind == BtnKind.Tab && selected)
                 Theme.FillRound(g, P.Accent, new RectangleF(Theme.Dpf(10), Height - Theme.Dpf(3), Width - Theme.Dpf(20), Theme.Dpf(3)), Theme.Dpf(1.5f));
 
+            if (Glyph != null && string.IsNullOrEmpty(Text) && !iconOnly)
+            {   // icon-only button (refresh etc.): glyph exactly in the middle, no text gap
+                DrawT(g, Glyph, Theme.Glyph(11f), new Rectangle(0, 0, Width, Height), fg, CenterMid);
+                return;
+            }
             if (iconOnly && Glyph != null)
             {
                 Color gc = (Kind == BtnKind.Nav && selected) ? P.Accent : fg;
@@ -544,12 +550,57 @@ namespace FoxideDisk
         }
         public void ApplyTheme() { BackColor = Theme.P.Surface2; ForeColor = Theme.P.Text; Invalidate(); }
 
-        // Windows draws the drop-down button and border with light system colours even in Flat style —
-        // paint our own chrome over it after every WM_PAINT.
+        // Windows draws the drop-down button and border with light system colours even in Flat style, and repaints them
+        // on hover — painting our chrome over it afterwards made a light frame flash in the dark theme. The closed
+        // DropDownList is therefore painted entirely by us (double-buffered), the system paint is skipped.
+        [StructLayout(LayoutKind.Sequential)]
+        struct PAINTSTRUCT { public IntPtr hdc; public bool fErase; public int l, t, r, b; public bool fRestore, fIncUpdate;
+            [MarshalAs(UnmanagedType.ByValArray, SizeConst = 32)] public byte[] rgbReserved; }
+        [DllImport("user32.dll")] static extern IntPtr BeginPaint(IntPtr hwnd, out PAINTSTRUCT ps);
+        [DllImport("user32.dll")] static extern bool EndPaint(IntPtr hwnd, ref PAINTSTRUCT ps);
+        bool hover;
+        protected override void OnMouseEnter(EventArgs e) { base.OnMouseEnter(e); hover = true; Invalidate(); }
+        protected override void OnMouseLeave(EventArgs e) { base.OnMouseLeave(e); hover = false; Invalidate(); }
+
         protected override void WndProc(ref Message m)
         {
+            if (m.Msg == 0x000F && DropDownStyle == ComboBoxStyle.DropDownList && IsHandleCreated)   // WM_PAINT
+            {
+                PAINTSTRUCT ps;
+                IntPtr hdc = BeginPaint(Handle, out ps);
+                try
+                {
+                    using (var g = Graphics.FromHdc(hdc))
+                    using (var buf = BufferedGraphicsManager.Current.Allocate(g, ClientRectangle))
+                    {
+                        PaintAll(buf.Graphics);
+                        buf.Render(g);
+                    }
+                }
+                finally { EndPaint(Handle, ref ps); }
+                m.Result = IntPtr.Zero;
+                return;
+            }
+            if (m.Msg == 0x0014 && DropDownStyle == ComboBoxStyle.DropDownList) { m.Result = (IntPtr)1; return; }   // WM_ERASEBKGND
             base.WndProc(ref m);
-            if (m.Msg == 0x000F || m.Msg == 0x0085) PaintChrome();
+            if (m.Msg == 0x0085) PaintChrome();
+        }
+
+        void PaintAll(Graphics g)
+        {
+            var P = Theme.P;
+            var r = ClientRectangle;
+            Color bg = Enabled ? (hover && !DroppedDown ? Theme.Mix(P.Surface2, P.Text, .04f) : P.Surface2) : Theme.Mix(P.Surface2, P.Surface, .5f);
+            using (var b = new SolidBrush(bg)) g.FillRectangle(b, r);
+            int bw = SystemInformation.VerticalScrollBarWidth + 2;
+            var tr = new Rectangle(Theme.Dp(6), 0, Math.Max(0, r.Width - bw - Theme.Dp(8)), r.Height);
+            TextRenderer.DrawText(g, SelectedIndex >= 0 ? (Items[SelectedIndex] ?? "").ToString() : Text, Font, tr,
+                Enabled ? P.Text : Theme.Mix(P.Text, P.Surface, .5f),
+                TextFormatFlags.Left | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPrefix);
+            TextRenderer.DrawText(g, "", Theme.Glyph(8f), new Rectangle(r.Width - bw - 1, 0, bw, r.Height),
+                Enabled ? P.Muted : Theme.Mix(P.Muted, P.Surface, .5f), TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.NoPadding);
+            using (var pen = new Pen(Focused || DroppedDown ? P.Accent : hover && Enabled ? Theme.Mix(P.Border, P.Text, .25f) : P.Border))
+                g.DrawRectangle(pen, 0, 0, r.Width - 1, r.Height - 1);
         }
         protected override void OnEnabledChanged(EventArgs e) { base.OnEnabledChanged(e); Invalidate(); }
         protected override void OnDropDownClosed(EventArgs e) { base.OnDropDownClosed(e); Invalidate(); }

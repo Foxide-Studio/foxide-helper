@@ -14,6 +14,18 @@ namespace FoxideDisk
         public bool BorderRight, BorderBottom;
         public RolePanel(Func<Color> bg) { Bg = bg; DoubleBuffered = true; ResizeRedraw = true; }
         public void ApplyTheme() { BackColor = Bg(); Invalidate(); }
+        /// <summary>Docked children stop 1 px short of a bordered edge, so the separator line is drawn edge to edge
+        /// instead of being covered in the middle (it used to show only as short stubs inside the padding).</summary>
+        public override Rectangle DisplayRectangle
+        {
+            get
+            {
+                var r = base.DisplayRectangle;
+                if (BorderRight) r.Width = Math.Max(0, r.Width - 1);
+                if (BorderBottom) r.Height = Math.Max(0, r.Height - 1);
+                return r;
+            }
+        }
         protected override void OnPaint(PaintEventArgs e)
         {
             base.OnPaint(e);

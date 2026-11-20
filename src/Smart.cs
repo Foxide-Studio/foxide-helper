@@ -146,7 +146,7 @@ namespace FoxideDisk
             {0xF0,L.T("Время полёта головок")},{0xF1,L.T("Всего записано")},{0xF2,L.T("Всего прочитано")},{0xFE,L.T("Свободное падение")},
         };
 
-        static SmartReport ParseAta(byte[] data, byte[] thr, DiskInfo d)
+        internal static SmartReport ParseAta(byte[] data, byte[] thr, DiskInfo d)
         {
             if (data == null || data.Length < 362) return null;
             var thresholds = new Dictionary<int, int>();
@@ -311,7 +311,12 @@ namespace FoxideDisk
         static SmartReport ReadNvme(int disk)
         {
             var b = NvmeLog(disk);
-            if (b == null) return null;
+            return b == null ? null : ParseNvme(b);
+        }
+
+        /// <summary>NVMe SMART / Health log page (512 bytes) → report. Internal for the screenshot demo (Demo.cs).</summary>
+        internal static SmartReport ParseNvme(byte[] b)
+        {
             var rep = new SmartReport { Source = L.T("NVMe SMART / Health (журнал 02h)"), Nvme = true, Spare = b[3], SpareThreshold = b[4], MediaErrors = U64(b, 160) };
             Func<string, string, string, SmartState, string, SmartRow> add = (name, val, norm, st, note) =>
             {

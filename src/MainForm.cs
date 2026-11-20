@@ -11,7 +11,7 @@ using Microsoft.Win32;
 
 namespace FoxideDisk
 {
-    public class MainForm : Form
+    public partial class MainForm : Form
     {
         // layout
         RolePanel sidebar, listPanel, content, headerPanel;
@@ -20,7 +20,8 @@ namespace FoxideDisk
         Row tabsRow;
         FlatButton btnRefresh, btnCollapse;
         TextBlock sectionsLabel, adminLabel, systemLabel;
-        bool DiskSection { get { return section != "settings" && section != "ram" && section != "stress"; } }
+        static readonly string[] SystemSections = { "settings", "ram", "cpu", "gpu", "battery", "cooling" };
+        bool DiskSection { get { return Array.IndexOf(SystemSections, section) < 0; } }
         readonly ToolTip tip = new ToolTip();
 
         // live temperature
@@ -123,6 +124,9 @@ namespace FoxideDisk
             sidebar = new RolePanel(() => Theme.P.Sidebar) { Dock = DockStyle.Left, Width = Theme.Dp(232), BorderRight = true };
             navStack = new Stack { Dock = DockStyle.Fill, Pad = 10, Gap = 2, Bg = () => Theme.P.Sidebar };
             navStack.Controls.Add(new LogoHeader());
+            btnCollapse = new FlatButton(L.T("Свернуть панель"), BtnKind.Nav, "");
+            btnCollapse.Click += (s, e) => SetSidebarCollapsed(!Settings.SidebarCollapsed, true);
+            navStack.Controls.Add(btnCollapse);
             navStack.Controls.Add(new Panel { Height = Theme.Dp(10) });
             sectionsLabel = new TextBlock("  " + L.T("РАЗДЕЛЫ"), TStyle.Small) { Single = true };
             navStack.Controls.Add(sectionsLabel);
@@ -141,17 +145,14 @@ namespace FoxideDisk
             bRam.Click += (s, e) => SelectSection("ram");
             nav["ram"] = bRam;
             navStack.Controls.Add(bRam);
-            var bStress = new FlatButton(L.T("Стресс-тест"), BtnKind.Nav, "");
-            bStress.Click += (s, e) => SelectSection("stress");
-            nav["stress"] = bStress;
-            navStack.Controls.Add(bStress);
+            AddSysNav("cpu", L.T("Процессор"), "\uE950");
+            AddSysNav("gpu", L.T("Видеокарта"), "\uE7F4");
+            if (BatteryService.HasBattery) AddSysNav("battery", L.T("Аккумулятор"), "\uEBA7");
+            AddSysNav("cooling", L.T("Охлаждение"), "\uE9CA");
             navBottom = new Stack { Dock = DockStyle.Bottom, Pad = 10, Gap = 6, Bg = () => Theme.P.Sidebar };
-            var bPatreon = new FlatButton(L.T("Поддержать на Patreon"), BtnKind.Nav, "");
+            bPatreon = new FlatButton(L.T("Поддержать на Patreon"), BtnKind.Nav, "");
             bPatreon.Click += (s, e) => OpenUrl(PatreonUrl);
             navBottom.Controls.Add(bPatreon);
-            btnCollapse = new FlatButton(L.T("Свернуть панель"), BtnKind.Nav, "");
-            btnCollapse.Click += (s, e) => SetSidebarCollapsed(!Settings.SidebarCollapsed, true);
-            navBottom.Controls.Add(btnCollapse);
             var bs = new FlatButton(L.T("Настройки"), BtnKind.Nav, "");
             bs.Click += (s, e) => SelectSection("settings");
             nav["settings"] = bs;
@@ -167,6 +168,15 @@ namespace FoxideDisk
             content.Resize += (s, e) => UpdateHeaderHeight();
         }
 
+        FlatButton bPatreon;
+
+        void AddSysNav(string id, string text, string glyph)
+        {
+            var b = new FlatButton(text, BtnKind.Nav, glyph);
+            b.Click += (s, e) => SelectSection(id);
+            nav[id] = b;
+            navStack.Controls.Add(b);
+        }
         public const string PatreonUrl = "https://www.patreon.com/cw/FoxideStudio";
         public const string RepoUrl = "https://github.com/" + Updater.Repo;
 
@@ -187,7 +197,7 @@ namespace FoxideDisk
             adminLabel.Visible = !collapsed;
             btnCollapse.Glyph = collapsed ? "" : "";
             btnCollapse.Text = collapsed ? L.T("Развернуть панель") : L.T("Свернуть панель");
-            foreach (var b in nav.Values.Concat(new[] { btnCollapse }))
+            foreach (var b in nav.Values.Concat(new[] { btnCollapse, bPatreon }))
             {
                 b.IconOnly = collapsed;
                 tip.SetToolTip(b, collapsed ? b.Text : null);
@@ -259,6 +269,9 @@ namespace FoxideDisk
                 t.Start();
             }
             Telemetry.Start();
+            if (!Demo.On) StartHwPoller();
+            if (Demo.On && Environment.GetEnvironmentVariable("FH_SHOT_BANNER") == "1")
+                ShowUpdateBanner(new UpdateInfo { Version = "1.2.0", Notes = "" });
         }
 
         // ---------------------------------------------------------------- updates (GitHub Releases)
@@ -290,8 +303,62 @@ namespace FoxideDisk
                 : L.F("Доступна версия {0}.", u.Version));
             if (err != null) { if (manual) FxMessage.Show(this, L.T("Не удалось проверить обновления.") + "\n\n" + err, L.T("Обновления"), MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
             if (u == null) { if (manual) FxMessage.Show(this, L.F("У вас последняя версия Foxide Helper ({0}).", Updater.CurrentText), L.T("Обновления"), MessageBoxButtons.OK, MessageBoxIcon.Information); return; }
-            if (!manual && (!Visible || u.Version == Settings.SkipVersion)) return;
+            if (!manual)
+            {
+                if (u.Version == Settings.SkipVersion) return;
+                ShowUpdateBanner(u);
+                if (!Visible && tray != null)
+                {
+                    trayBalloonUpdate = true;
+                    tray.ShowBalloonTip(10000, L.T("Доступно обновление Foxide Helper"), L.F("Версия {0}. Нажмите, чтобы открыть программу и обновить.", u.Version), ToolTipIcon.Info);
+                }
+                return;
+            }
+            HideUpdateBanner();
             OfferUpdate(u);
+        }
+
+        // ---- полоса «Доступна новая версия» над шапкой ----
+        RolePanel updBanner;
+        bool trayBalloonUpdate;
+
+        void ShowUpdateBanner(UpdateInfo u)
+        {
+            HideUpdateBanner();
+            updBanner = new RolePanel(() => Theme.Mix(Theme.P.Back, Theme.P.Accent, .16f)) { Dock = DockStyle.Top, Height = Theme.Dp(58), BorderBottom = true };
+            updBanner.Padding = new Padding(Theme.Dp(24), Theme.Dp(10), Theme.Dp(24), Theme.Dp(10));
+            var text = new TextBlock(L.F("Доступна новая версия Foxide Helper {0} (у вас {1}).", u.Version, Updater.CurrentText), TStyle.Bold) { Single = true };
+            var bUpd = new FlatButton(L.T("Обновить"), BtnKind.Primary, "");
+            bUpd.Click += (s, e) => { HideUpdateBanner(); OfferUpdate(u); };
+            var bLater = new FlatButton(L.T("Позже"), BtnKind.Secondary, "");
+            bLater.Click += (s, e) => HideUpdateBanner();
+            var bOff = new FlatButton(L.T("Не проверять обновления"), BtnKind.Ghost, "");
+            bOff.Click += (s, e) =>
+            {
+                Settings.CheckUpdates = false; Settings.Save();
+                text.Text = L.T("Проверка обновлений отключена. Включить снова: «Настройки» → «Обновления».");
+                text.Invalidate();
+                bUpd.Visible = bLater.Visible = bOff.Visible = false;
+                var t = new System.Windows.Forms.Timer { Interval = 6000 };
+                t.Tick += (s2, e2) => { t.Stop(); t.Dispose(); HideUpdateBanner(); };
+                t.Start();
+                if (section == "settings") BuildSettings();
+            };
+            var row = new Row { Dock = DockStyle.Fill, MinHeight = 38 };
+            row.Add(text, -1).Add(bUpd, 130).Add(bLater, 110).Add(bOff, 220);
+            updBanner.Controls.Add(row);
+            content.Controls.Add(updBanner);
+            Theme.Apply(updBanner);
+            content.PerformLayout();
+        }
+
+        void HideUpdateBanner()
+        {
+            if (updBanner == null) return;
+            var b = updBanner; updBanner = null;
+            content.Controls.Remove(b);
+            b.Dispose();
+            content.PerformLayout();
         }
 
         async void OfferUpdate(UpdateInfo u)
@@ -370,6 +437,7 @@ namespace FoxideDisk
             tray.BalloonTipClicked += (s, e) =>
             {
                 ShowFromTray();
+                if (trayBalloonUpdate) { trayBalloonUpdate = false; return; }
                 var d = disks.FirstOrDefault(x => x.Signature == lastAlertSig);
                 if (d != null)
                 {
@@ -386,6 +454,7 @@ namespace FoxideDisk
             var open = new ToolStripMenuItem(L.T("Открыть Foxide Helper"), null, (s, e) => ShowFromTray()) { Font = Theme.Bold };
             trayMenu.Items.Add(open);
             trayMenu.Items.Add(new ToolStripSeparator());
+            AddTraySensorItems();
             foreach (var d in disks.Where(x => IsShown(x)))
             {
                 string t = d.TempC.HasValue ? d.TempC + " °C" : "—";
@@ -428,6 +497,7 @@ namespace FoxideDisk
             if (!trayHintShown && tray != null)
             {
                 trayHintShown = true;
+                trayBalloonUpdate = false;
                 tray.ShowBalloonTip(5000, L.T("Foxide Helper работает в фоне"),
                     Settings.TempAlerts ? L.T("Температура дисков проверяется, при перегреве появится уведомление. Выход — через значок в трее.") : L.T("Выход — через значок в трее."),
                     ToolTipIcon.Info);
@@ -442,7 +512,7 @@ namespace FoxideDisk
 
         void PollAlerts()
         {
-            if (!Settings.TempAlerts || alertPolling || busy || loading) return;
+            if (Demo.On || !Settings.TempAlerts || alertPolling || busy || loading) return;
             alertTimer.Interval = Settings.AlertIntervalSec * 1000;
             var list = disks.Where(d => d.Kind != DiskKind.Virtual && (Settings.AlertPollHdd || !d.IsRotating) && (d.TempC.HasValue || d.Smart != null)).ToList();
             if (list.Count == 0) return;
@@ -504,6 +574,7 @@ namespace FoxideDisk
             InitTray();
             tray.Visible = true;
             lastAlertSig = d.Signature;
+            trayBalloonUpdate = false;
             tray.ShowBalloonTip(15000, L.F("Перегрев диска: {0} °C", v),
                 L.F("{0} (диск {1}{2}) нагрелся до {3} °C — порог {4} °C. Проверьте охлаждение.", d.Model, d.Number, d.Letters.Length > 0 ? ", " + d.Letters : "", v, limit),
                 ToolTipIcon.Warning);
@@ -519,6 +590,7 @@ namespace FoxideDisk
         protected override void WndProc(ref Message m)
         {
             base.WndProc(ref m);
+            if (Demo.On) Demo.FixMinMax(ref m);
             const int WM_DEVICECHANGE = 0x0219;
             if (m.Msg == WM_DEVICECHANGE && Settings.AutoRefresh)
             {
@@ -545,6 +617,7 @@ namespace FoxideDisk
             if (speedCts != null) speedCts.Cancel();
             base.OnFormClosing(e);
             if (!e.Cancel && tray != null) { tray.Visible = false; tray.Dispose(); tray = null; }
+            if (!e.Cancel) StopHwPoller();
         }
 
         protected override void Dispose(bool disposing)
@@ -578,7 +651,8 @@ namespace FoxideDisk
             if (disks.Count == 0 && DiskSection) { BuildList(); ShowDisk(null); }
             try
             {
-                disks = await Task.Run(() => DiskService.Load());
+                disks = await Task.Run(() => Demo.On ? Demo.Disks() : DiskService.Load());
+                if (Demo.On) Demo.Seed(disks, tempHistory, speedResults);
             }
             catch (Exception ex)
             {
@@ -638,15 +712,33 @@ namespace FoxideDisk
             if (started) Telemetry.Count("section." + id);
             section = id;
             foreach (var kv in nav) kv.Value.Selected = kv.Key == id;
-            bool settings = id == "settings", ram = id == "ram", stress = id == "stress";
-            listPanel.Visible = !settings && !ram && !stress;
-            tabsRow.Visible = !settings && !ram && !stress;
-            if (stress)
+            if (id == "stress") id = section = "cpu";       // old name of the section
+            bool settings = id == "settings", ram = id == "ram", sys = Array.IndexOf(SystemSections, id) >= 0;
+            listPanel.Visible = !sys;
+            tabsRow.Visible = !sys;
+            if (id == "cpu" || id == "gpu")
             {
-                hTitle.Text = L.T("Стресс-тест");
-                hSub.Text = cpuInfoName ?? L.T("Процессор и видеокарта под максимальной нагрузкой");
+                hTitle.Text = id == "cpu" ? L.T("Процессор") : L.T("Видеокарта");
+                hSub.Text = id == "cpu" ? (cpuInfoName ?? L.T("Сведения, датчики и стресс-тест процессора"))
+                                        : (gpuInfoName ?? L.T("Сведения, датчики и стресс-тест видеокарты"));
                 UpdateHeaderHeight();
-                BuildStress();
+                BuildStress(id);
+                return;
+            }
+            if (id == "battery")
+            {
+                hTitle.Text = L.T("Аккумулятор");
+                hSub.Text = L.T("Здоровье, износ и проверка разрядом");
+                UpdateHeaderHeight();
+                BuildBattery();
+                return;
+            }
+            if (id == "cooling")
+            {
+                hTitle.Text = L.T("Охлаждение");
+                hSub.Text = L.T("Вентиляторы и температуры");
+                UpdateHeaderHeight();
+                BuildCooling();
                 return;
             }
             if (ram)
@@ -1425,7 +1517,7 @@ namespace FoxideDisk
 
         void PollTemp()
         {
-            if (!Settings.LiveTemp || !Visible || tempReading || busy || loading || sel == null || sel.Kind == DiskKind.Virtual) return;
+            if (Demo.On || !Settings.LiveTemp || !Visible || tempReading || busy || loading || sel == null || sel.Kind == DiskKind.Virtual) return;
             var d = sel;
             tempReading = true;
             Task.Run(() => SmartReader.ReadTemp(d)).ContinueWith(t =>
@@ -1529,9 +1621,16 @@ namespace FoxideDisk
             catch { }
         }
 
-        void BuildStress()
+        string gpuInfoName;
+
+        void BuildStress(string kind)
         {
             BeginPage();
+            if (Demo.On && cpuSensors == null)
+            {
+                cpuSensors = Demo.Cpu();
+                cpuInfoName = cpuSensors.Info.Name;
+            }
             if (cpuSensors == null && !sensorsLoading)
             {
                 sensorsLoading = true;
@@ -1541,12 +1640,13 @@ namespace FoxideDisk
                     if (t.IsFaulted) return;
                     cpuSensors = t.Result.Key; gpuSensors = t.Result.Value;
                     cpuInfoName = cpuSensors.Info.Name + "  ·  " + L.F("ядер {0}, потоков {1}", cpuSensors.Info.Cores, cpuSensors.Info.Threads);
-                    if (section == "stress" && !busy) SelectSection("stress");
+                    if ((section == "cpu" || section == "gpu") && !busy) SelectSection(section);
                 })));
             }
 
-            page.Controls.Add(new Banner(BannerKind.Warning, L.T("Максимальная нагрузка"),
-                L.F("Стресс-тест сильно нагревает процессор и видеокарту и разряжает батарею ноутбука. Следите за температурой. Тест остановится сам, если процессор нагреется до {0} °C или видеокарта до {1} °C. Ошибки вычислений означают нестабильность: перегрев, слишком сильный разгон или нехватку питания.", CpuTempLimit, GpuTempLimit)));
+            page.Controls.Add(new Banner(BannerKind.Warning, L.T("Максимальная нагрузка"), kind == "cpu"
+                ? L.F("Стресс-тест сильно нагревает процессор и разряжает батарею ноутбука. Следите за температурой: тест остановится сам при {0} °C. Ошибки вычислений означают нестабильность: перегрев, слишком сильный разгон или нехватку питания.", CpuTempLimit)
+                : L.F("Стресс-тест сильно нагревает видеокарту и разряжает батарею ноутбука. Следите за температурой: тест остановится сам при {0} °C. Артефакты и сбросы драйвера означают нестабильность видеокарты или блока питания.", GpuTempLimit)));
 
             if (cpuSensors == null)
             {
@@ -1554,8 +1654,8 @@ namespace FoxideDisk
                 EndPage();
                 return;
             }
-            BuildCpuStress();
-            BuildGpuStress();
+            if (kind == "cpu") BuildCpuStress();
+            else { BuildGpuInfo(); BuildGpuStress(); }
             EndPage();
         }
 
@@ -1577,7 +1677,7 @@ namespace FoxideDisk
         void BuildCpuStress()
         {
             var s = cpuSensors;
-            var card = Card(L.T("Процессор"), s.Info.Name);
+            var card = Card(L.T("Стресс-тест процессора"), s.Info.Name);
             TimeSpan[] durs;
             var cDur = DurationCombo(out durs);
             int all = Math.Max(1, s.Info.Threads);
@@ -1598,13 +1698,13 @@ namespace FoxideDisk
             var tLoad = new StatTile(L.T("Загрузка"), "—");
             var tClock = new StatTile(L.T("Частота"), "—", s.Info.MaxMHz > 0 ? L.F("базовая {0} ГГц", (s.Info.MaxMHz / 1000.0).ToString("0.00")) : null);
             var tTemp = new StatTile(L.T("Температура"), "—", L.T("датчик недоступен"));
-            var tPerf = new StatTile(L.T("Производительность"), "—", "GFLOPS (double)");
+            var tPerf = new StatTile(L.T("Быстродействие"), "—", "GFLOPS (double)");
             var tErr = new StatTile(L.T("Ошибки вычислений"), "—");
             var tTime = new StatTile(L.T("Время"), "—");
             grid.Controls.AddRange(new Control[] { tLoad, tClock, tTemp, tPerf, tErr, tTime });
             card.Controls.Add(grid);
 
-            double? t0 = s.Temperature();
+            double? t0 = Demo.On ? 78 : s.Temperature();
             var chart = new TempChart { Window = TimeSpan.FromMinutes(5) };
             if (t0.HasValue) { chart.Warn = 85; chart.Bad = CpuTempLimit; }
             else { chart.Warn = double.NaN; chart.Bad = double.NaN; chart.Unit = " " + L.T("МГц"); chart.Axis = ""; }
@@ -1683,12 +1783,26 @@ namespace FoxideDisk
             };
             stop.Click += (o, e) => finish(L.T("Остановлено вручную"));
             card.Disposed += (o, e) => { if (run != null) { run.Stop(); run = null; } timer.Dispose(); };
+            if (Demo.On)
+            {
+                // screenshot: a test that has been running for 4 min 12 s
+                tLoad.Set("100 %", L.F("{0} потоков теста", 16));
+                tClock.Set(L.F("{0} ГГц", 4.85.ToString("0.00")), L.F("базовая {0} ГГц", 4.20.ToString("0.00")));
+                tTemp.Set("78 °C", L.T("датчик ACPI")); tTemp.ValueColor = () => Theme.P.Success;
+                tPerf.Set("214.6", "GFLOPS (double)");
+                tErr.Set("0", L.T("стабильно")); tErr.ValueColor = () => Theme.P.Success;
+                tTime.Set(Dur(TimeSpan.FromSeconds(252)), L.F("из {0}", Dur(TimeSpan.FromMinutes(5))));
+                prog.Value = 252 / 300.0;
+                status.Text = L.F("Идёт тест…  итераций {0}", 18406221L.ToString("N0"));
+                start.Enabled = false; stop.Enabled = true; cDur.Enabled = cThr.Enabled = false;
+                chart.Points.AddRange(Demo.Curve(252, 46, 78, 1.6, 1));
+            }
         }
 
         void BuildGpuStress()
         {
             var gs = gpuSensors;
-            var card = Card(L.T("Видеокарта"), gs != null && gs.HasNvml ? gs.NvName : L.T("Нагрузка через OpenGL — работает с видеокартами NVIDIA, AMD и Intel"));
+            var card = Card(L.T("Стресс-тест видеокарты"), Demo.On ? Demo.GpuName : gs != null && gs.HasNvml ? gs.NvName : L.T("Нагрузка через OpenGL — работает с видеокартами NVIDIA, AMD и Intel"));
             TimeSpan[] durs;
             var cDur = DurationCombo(out durs);
             var start = new FlatButton(L.T("Запустить"), BtnKind.Primary, "");
@@ -1708,11 +1822,11 @@ namespace FoxideDisk
             var tTemp = new StatTile(L.T("Температура"), "—", gs != null && gs.HasNvml ? "NVIDIA" : L.T("только для NVIDIA"));
             var tClock = new StatTile(L.T("Частота ядра"), "—");
             var tPower = new StatTile(L.T("Потребление"), "—");
-            var tWork = new StatTile(L.T("Производительность"), "—", L.T("Гпикс·итераций/с"));
+            var tWork = new StatTile(L.T("Быстродействие"), "—", L.T("Гпикс·итераций/с"));
             grid.Controls.AddRange(new Control[] { tFps, tLoad, tTemp, tClock, tPower, tWork });
             card.Controls.Add(grid);
 
-            bool hasTemp = gs != null && gs.HasNvml && gs.NvTemp().HasValue;
+            bool hasTemp = Demo.On || (gs != null && gs.HasNvml && gs.NvTemp().HasValue);
             var chart = new TempChart { Window = TimeSpan.FromMinutes(5) };
             if (hasTemp) { chart.Warn = 83; chart.Bad = GpuTempLimit; }
             else { chart.Warn = double.NaN; chart.Bad = double.NaN; chart.Unit = " %"; chart.Axis = "%"; }
@@ -1787,6 +1901,19 @@ namespace FoxideDisk
             };
             stop.Click += (o, e) => finish(L.T("Остановлено вручную"));
             card.Disposed += (o, e) => { running = false; view.StopRender(); timer.Dispose(); };
+            if (Demo.On)
+            {
+                tFps.Set("143", L.F("проходов за кадр: {0}", 24));
+                tLoad.Set("99 %", null);
+                tTemp.Set("71 °C", "NVIDIA"); tTemp.ValueColor = () => Theme.P.Success;
+                tClock.Set(L.F("{0} МГц", 2745), null);
+                tPower.Set(L.F("{0} Вт", 198), null);
+                tWork.Set("412.8", L.T("Гпикс·итераций/с"));
+                prog.Value = 188 / 300.0;
+                status.Text = L.F("Идёт тест на: {0}", Demo.GpuName + "/PCIe/SSE2") + "  ·  " + Dur(TimeSpan.FromSeconds(188));
+                start.Enabled = false; stop.Enabled = true; cDur.Enabled = false;
+                chart.Points.AddRange(Demo.Curve(188, 38, 71, 1.2, 2));
+            }
         }
 
         // ---------------------------------------------------------------- RAM
@@ -2193,6 +2320,10 @@ namespace FoxideDisk
 
             Action syncAlerts = () => { cSsd.Enabled = cHdd.Enabled = cEvery.Enabled = tHdd.Enabled = test.Enabled = Settings.TempAlerts; };
             tTray.CheckedChanged += (s, e) => { Settings.MinimizeToTray = tTray.Checked; Settings.Save(); InitTray(); };
+            var tSens = new Toggle(L.T("Показывать температуры процессора, видеокарты и памяти в меню значка"), Settings.TraySensors);
+            tSens.CheckedChanged += (s, e) => { Settings.TraySensors = tSens.Checked; Settings.Save(); };
+            var tBat = new Toggle(L.T("Показывать заряд и здоровье аккумулятора в меню значка"), Settings.TrayBattery);
+            tBat.CheckedChanged += (s, e) => { Settings.TrayBattery = tBat.Checked; Settings.Save(); };
             tAlerts.CheckedChanged += (s, e) => { Settings.TempAlerts = tAlerts.Checked; Settings.Save(); InitTray(); syncAlerts(); if (tAlerts.Checked) PollAlerts(); };
             cSsd.SelectedIndexChanged += (s, e) => { Settings.AlertSsd = ssdT[cSsd.SelectedIndex]; Settings.Save(); alertSent.Clear(); };
             cHdd.SelectedIndexChanged += (s, e) => { Settings.AlertHdd = hddT[cHdd.SelectedIndex]; Settings.Save(); alertSent.Clear(); };
@@ -2227,6 +2358,8 @@ namespace FoxideDisk
             bg.Controls.Add(tAuto);
             bg.Controls.Add(autoState);
             bg.Controls.Add(tTray);
+            bg.Controls.Add(tSens);
+            if (BatteryService.HasBattery) bg.Controls.Add(tBat);
             bg.Controls.Add(tAlerts);
             bg.Controls.Add(FormRow(L.T("Порог для SSD / NVMe"), cSsd, 230));
             bg.Controls.Add(FormRow(L.T("Порог для HDD"), cHdd, 230));
@@ -2299,8 +2432,10 @@ namespace FoxideDisk
         public void ForTest(string sectionId, int tabIndex)
         {
             if (sectionId != null) SelectSection(sectionId);
-            if (tabIndex >= 0 && sectionId != "settings") SelectTab(tabIndex);
+            if (tabIndex >= 0 && Array.IndexOf(SystemSections, sectionId) < 0) SelectTab(tabIndex);
         }
+
+        public void ScrollPage(int y) { page.AutoScrollPosition = new Point(0, y); }
 
         public bool SelectDiskNumber(int n)
         {

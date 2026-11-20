@@ -31,6 +31,8 @@ namespace FoxideDisk
         public static string InstallId = "";         // random id of this copy (not tied to the PC) — counts unique installs
         public static string StatsDay = "";          // last day (yyyy-MM-dd UTC) the statistics were sent
         public static int Launches = 0;              // launches since the last report
+        public static bool TraySensors = true;       // tray menu: CPU / GPU / RAM temperatures
+        public static bool TrayBattery = true;       // tray menu: battery charge and health
         public static string SkipVersion = "";       // "skip this version" in the update dialog
         public static readonly HashSet<string> CollapsedCards = new HashSet<string>();
 
@@ -90,6 +92,8 @@ namespace FoxideDisk
                 InstallId = Str(d, "InstallId", "");
                 StatsDay = Str(d, "StatsDay", "");
                 Launches = Int(d, "Launches", 0, 0, 100000);
+                TraySensors = Bool(d, "TraySensors", TraySensors);
+                TrayBattery = Bool(d, "TrayBattery", TrayBattery);
                 SkipVersion = Str(d, "SkipVersion", "");
                 CollapsedCards.Clear();
                 foreach (var k in Str(d, "CollapsedCards", "").Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries))
@@ -129,6 +133,8 @@ namespace FoxideDisk
                 sb.AppendLine("InstallId=" + InstallId);
                 sb.AppendLine("StatsDay=" + StatsDay);
                 sb.AppendLine("Launches=" + Launches);
+                sb.AppendLine("TraySensors=" + TraySensors);
+                sb.AppendLine("TrayBattery=" + TrayBattery);
                 sb.AppendLine("SkipVersion=" + SkipVersion);
                 sb.AppendLine("CollapsedCards=" + string.Join(",", CollapsedCards));
                 File.WriteAllText(FilePath, sb.ToString(), Encoding.UTF8);

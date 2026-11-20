@@ -183,6 +183,7 @@ void main(){
         protected override void OnPaint(PaintEventArgs e)
         {
             if (running) return;
+            if (Demo.On) { Demo.PaintGpu(e.Graphics, ClientRectangle); return; }
             var P = Theme.P;
             e.Graphics.Clear(P.Dark ? Color.FromArgb(14, 15, 18) : Color.FromArgb(28, 30, 36));
             TextRenderer.DrawText(e.Graphics, Error ?? L.T("Здесь будет изображение теста"), Theme.Body, ClientRectangle,

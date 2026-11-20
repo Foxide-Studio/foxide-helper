@@ -12,8 +12,8 @@ using System.Windows.Forms;
 [assembly: AssemblyDescription("Disk, memory and CPU/GPU toolkit for Windows")]
 [assembly: AssemblyCompany("Foxide Studio")]
 [assembly: AssemblyCopyright("© 2026 Foxide Studio")]
-[assembly: AssemblyVersion("1.0.0.0")]
-[assembly: AssemblyFileVersion("1.0.0.0")]
+[assembly: AssemblyVersion("1.1.9.0")]
+[assembly: AssemblyFileVersion("1.1.9.0")]
 
 namespace FoxideDisk
 {
@@ -38,9 +38,19 @@ namespace FoxideDisk
 
             float scale = 1f;
             using (var g = Graphics.FromHwnd(IntPtr.Zero)) scale = g.DpiX / 96f;
+            // screenshot demo (only together with --shot): invented hardware, English UI, 1.5x scale
+            if (args.Length >= 2 && args[0] == "--shot" && Array.IndexOf(args, "--demo") >= 0)
+            {
+                Demo.On = true;
+                Theme.FontScale = 1.5f / scale;
+                scale = 1.5f;
+                foreach (var a in args) if (a.StartsWith("--scroll=")) int.TryParse(a.Substring(9), out Demo.ScrollY);
+                args = Array.FindAll(args, a => a != "--demo" && !a.StartsWith("--scroll="));
+            }
             Theme.Init(scale);
             Settings.Load();
             L.Lang = Settings.Language;
+            if (Demo.On) Demo.PrepareSettings();
             Theme.Set(Settings.ThemeMode);
 
             if (args.Length >= 2 && (args[0] == "--dump" || args[0] == "--shot")) Telemetry.Off = true;
@@ -135,6 +145,7 @@ namespace FoxideDisk
             }
 
             var f = new MainForm { StartPosition = FormStartPosition.Manual, Location = new Point(-20000, -20000), ShowInTaskbar = false };
+            if (Demo.On) Demo.Attach(f);
             int h;
             if (args.Length > 6 && int.TryParse(args[6], out h)) f.Height = h;
             f.DisksLoaded += (s, e) =>
@@ -147,6 +158,11 @@ namespace FoxideDisk
                 {
                     t.Stop();
                     Application.DoEvents();
+                    if (Demo.On)
+                    {
+                        if (Demo.ScrollY > 0) { f.ScrollPage(Demo.ScrollY); Application.DoEvents(); }
+                        Demo.Save(f, args[1]); f.Close(); return;
+                    }
                     using (var bmp = new Bitmap(f.Width, f.Height))
                     {
                         f.DrawToBitmap(bmp, new Rectangle(0, 0, f.Width, f.Height));

@@ -63,6 +63,7 @@ namespace FoxideDisk
 
         public static RamStatus Status()
         {
+            if (Demo.On) return Demo.MemStatus();
             var m = new MEMORYSTATUSEX { dwLength = (uint)Marshal.SizeOf(typeof(MEMORYSTATUSEX)) };
             GlobalMemoryStatusEx(ref m);
             return new RamStatus
@@ -103,6 +104,7 @@ namespace FoxideDisk
 
         public static RamInfo Load()
         {
+            if (Demo.On) return Demo.Ram();
             var info = new RamInfo();
             try
             {
@@ -142,6 +144,7 @@ namespace FoxideDisk
         /// <summary>Last result of Windows Memory Diagnostic (mdsched) from the System event log.</summary>
         public static MemDiagResult LastDiagnostic()
         {
+            if (Demo.On) return Demo.MemDiag();
             try
             {
                 var q = new EventLogQuery("System", PathType.LogName,

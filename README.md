@@ -31,16 +31,24 @@ The interface is available in **English** and **Russian** (Settings → Appearan
 ### System
 - **Memory:** usage, modules (manufacturer, size, speed, slots), a quick in-Windows test (MemTest-style patterns over the memory available
   to the process) and scheduling the full Windows Memory Diagnostic on reboot.
-- **Stress test:** CPU (all cores, load, clock, temperature) and GPU (OpenGL load; load of any GPU from Windows counters,
-  temperature / clock / power for NVIDIA via NVML).
+- **Processor:** CPU stress test on all cores with load, clock, temperature, GFLOPS and computation-error checks.
+- **Graphics card:** every adapter is detected — model, video memory, driver version and date, display mode, PCIe link,
+  power limit, max clocks and VBIOS (NVIDIA); OpenGL stress test with load, temperature, clock and power.
+- **Battery** (laptops): health and wear (full charge vs. design capacity), charge cycles, power draw, voltage, temperature,
+  and a discharge test under CPU / CPU+GPU load that measures average and peak power, runtime and real capacity.
+- **Cooling:** CPU, GPU and memory temperatures and fans that Windows and the graphics drivers expose; NVIDIA GPU fan speed
+  control where the driver allows it (fans return to automatic on exit). No drivers are installed — motherboard and case fans
+  and memory temperature usually need the motherboard vendor's software.
 
 ### Background and notifications
-- Start with Windows (a Task Scheduler task, no UAC prompt), tray icon.
+- Start with Windows (a Task Scheduler task, no UAC prompt), tray icon. Its menu shows disk, CPU, GPU and memory temperatures
+  and battery charge / health (each can be turned off in Settings).
 - Disk overheating notifications with separate thresholds for SSD and HDD.
 - Light, dark and system theme; the disk list refreshes when USB devices are plugged in; high-DPI support.
 
 ## Updates
-The program checks [GitHub Releases](https://github.com/Foxide-Studio/foxide-helper/releases) at start (can be turned off in Settings → Updates).
+The program checks [GitHub Releases](https://github.com/Foxide-Studio/foxide-helper/releases) at start and shows a notice with
+**Update**, **Later** and **Don't check for updates** (the check can be turned back on in Settings → Updates).
 A release is offered when its tag `vX.Y.Z` is newer than the running version and it has a `FoxideHelper.exe` asset. Before installing,
 the download is checked against the asset size and its SHA-256 (the `digest` GitHub reports for the asset, or a `FoxideHelper.exe.sha256` asset).
 The running exe is renamed to `.old`, the new one takes its place and starts; leftovers are removed on the next start.

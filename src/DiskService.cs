@@ -371,7 +371,7 @@ namespace FoxideDisk
             }
         }
 
-        static void Evaluate(DiskInfo d)
+        internal static void Evaluate(DiskInfo d)
         {
             var n = d.HealthNotes;
             var st = HealthState.Good;

@@ -23,6 +23,7 @@ namespace FoxideDisk
     {
         public static Palette P = Light();
         public static float Scale = 1f;
+        public static float FontScale = 1f;      // screenshot demo renders a 1.5x UI on a 96-DPI screen (Demo.cs)
         public static string GlyphFamily = "Segoe MDL2 Assets";
         public static Font Body, Small, Bold, Title, Subtitle, Big, Section, Mono;
         static readonly Dictionary<float, Font> glyphCache = new Dictionary<float, Font>();
@@ -32,14 +33,14 @@ namespace FoxideDisk
         public static void Init(float dpiScale)
         {
             Scale = dpiScale <= 0 ? 1f : dpiScale;
-            Body = new Font("Segoe UI", 9.5f);
-            Small = new Font("Segoe UI", 8.5f);
-            Bold = new Font("Segoe UI Semibold", 9.5f);
-            Section = new Font("Segoe UI Semibold", 11f);
-            Subtitle = new Font("Segoe UI", 10f);
-            Title = new Font("Segoe UI Semibold", 17f);
-            Big = new Font("Segoe UI Semibold", 18f);
-            Mono = new Font("Consolas", 9f);
+            Body = new Font("Segoe UI", 9.5f * FontScale);
+            Small = new Font("Segoe UI", 8.5f * FontScale);
+            Bold = new Font("Segoe UI Semibold", 9.5f * FontScale);
+            Section = new Font("Segoe UI Semibold", 11f * FontScale);
+            Subtitle = new Font("Segoe UI", 10f * FontScale);
+            Title = new Font("Segoe UI Semibold", 17f * FontScale);
+            Big = new Font("Segoe UI Semibold", 18f * FontScale);
+            Mono = new Font("Consolas", 9f * FontScale);
             try
             {
                 using (var fonts = new InstalledFontCollection())
@@ -54,7 +55,7 @@ namespace FoxideDisk
             Font f;
             if (!glyphCache.TryGetValue(size, out f))
             {
-                f = new Font(GlyphFamily, size);
+                f = new Font(GlyphFamily, size * FontScale);
                 glyphCache[size] = f;
             }
             return f;

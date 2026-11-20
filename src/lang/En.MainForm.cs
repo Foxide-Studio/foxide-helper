@@ -245,7 +245,7 @@
             "Частота", "Clock",
             "базовая {0} ГГц", "base {0} GHz",
             "датчик недоступен", "sensor unavailable",
-            "Производительность", "Performance",
+            "Быстродействие", "Performance",
             "Ошибки вычислений", "Computation errors",
             "Время", "Time",
             "МГц", "MHz",
