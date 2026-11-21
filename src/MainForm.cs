@@ -20,7 +20,7 @@ namespace FoxideDisk
         Row tabsRow;
         FlatButton btnRefresh, btnCollapse;
         TextBlock sectionsLabel, adminLabel, systemLabel;
-        static readonly string[] SystemSections = { "settings", "ram", "cpu", "gpu", "battery", "cooling" };
+        static readonly string[] SystemSections = { "home", "settings", "ram", "cpu", "gpu", "battery", "cooling" };
         bool DiskSection { get { return Array.IndexOf(SystemSections, section) < 0; } }
         readonly ToolTip tip = new ToolTip();
 
@@ -52,6 +52,7 @@ namespace FoxideDisk
         static readonly string[] SectionIds = { "all", "ssd", "hdd", "usb", "other" };
         static readonly string[] SectionNames = { L.T("Все диски"), "SSD", "HDD", L.T("USB и карты памяти"), L.T("Другие") };
         static readonly string[] SectionGlyphs = { "", "", "", "", "" };
+        static readonly string[] TabIds = { "overview", "health", "speed", "wipe" };
         static readonly string[] TabNames = { L.T("Обзор"), L.T("Здоровье"), L.T("Скорость"), L.T("Очистка") };
         static readonly string[] TabGlyphs = { "", "", "", "" };
 
@@ -127,6 +128,8 @@ namespace FoxideDisk
             btnCollapse = new FlatButton(L.T("Свернуть панель"), BtnKind.Nav, "");
             btnCollapse.Click += (s, e) => SetSidebarCollapsed(!Settings.SidebarCollapsed, true);
             navStack.Controls.Add(btnCollapse);
+            navStack.Controls.Add(new Panel { Height = Theme.Dp(6) });
+            AddSysNav("home", L.T("Главная"), "\uE80F");
             navStack.Controls.Add(new Panel { Height = Theme.Dp(10) });
             sectionsLabel = new TextBlock("  " + L.T("РАЗДЕЛЫ"), TStyle.Small) { Single = true };
             navStack.Controls.Add(sectionsLabel);
@@ -151,7 +154,7 @@ namespace FoxideDisk
             AddSysNav("cooling", L.T("Охлаждение"), "\uE9CA");
             navBottom = new Stack { Dock = DockStyle.Bottom, Pad = 10, Gap = 6, Bg = () => Theme.P.Sidebar };
             bPatreon = new FlatButton(L.T("Поддержать на Patreon"), BtnKind.Nav, "");
-            bPatreon.Click += (s, e) => OpenUrl(PatreonUrl);
+            bPatreon.Click += (s, e) => { Telemetry.Count("action.patreon_sidebar"); OpenUrl(PatreonUrl); };
             navBottom.Controls.Add(bPatreon);
             var bs = new FlatButton(L.T("Настройки"), BtnKind.Nav, "");
             bs.Click += (s, e) => SelectSection("settings");
@@ -253,7 +256,7 @@ namespace FoxideDisk
         {
             if (started) return;
             started = true;
-            SelectSection("all", false);
+            SelectSection(Demo.On && Environment.GetEnvironmentVariable("FH_SHOT_START") == "disks" ? "all" : "home", false);
             InitTray();
             RefreshDisks();
             if (Settings.LiveTemp && !StartHidden) tempTimer.Start();
@@ -268,6 +271,19 @@ namespace FoxideDisk
                 t.Tick += (s, e) => { t.Stop(); t.Dispose(); CheckForUpdates(false); };
                 t.Start();
             }
+            Telemetry.Context = () =>
+            {
+                var ds = disks;   // the list object is replaced, not modified, on refresh
+                var gpus = HwInfo.Gpus();
+                return new Dictionary<string, object>
+                {
+                    { "disks_ssd", ds.Count(x => x.Kind == DiskKind.SSD) }, { "disks_nvme", ds.Count(x => x.Kind == DiskKind.SSD && x.BusType == 17) },
+                    { "disks_hdd", ds.Count(x => x.Kind == DiskKind.HDD) }, { "disks_usb", ds.Count(x => x.Kind == DiskKind.Removable) },
+                    { "gpu", gpus.Count > 0 ? gpus[0].Vendor.ToLowerInvariant() : "none" },
+                    { "gpu_count", gpus.Count }, { "battery", BatteryService.HasBattery },
+                    { "ram_gb", ramInfo != null ? (int)Math.Round(ramInfo.Installed / 1073741824.0) : 0 },
+                };
+            };
             Telemetry.Start();
             if (!Demo.On) StartHwPoller();
             if (Demo.On && Environment.GetEnvironmentVariable("FH_SHOT_BANNER") == "1")
@@ -390,6 +406,7 @@ namespace FoxideDisk
             if (err == null)
             {
                 Settings.SkipVersion = ""; Settings.Save();
+                Telemetry.Count("action.update_install");
                 try { Updater.Install(file); }
                 catch (Exception ex) { err = L.T("Не удалось заменить файл программы:") + " " + ex.Message + "\n\n" + L.T("Скачайте новую версию вручную со страницы релизов на GitHub."); }
             }
@@ -725,6 +742,14 @@ namespace FoxideDisk
                 BuildStress(id);
                 return;
             }
+            if (id == "home")
+            {
+                hTitle.Text = L.T("Главная");
+                hSub.Text = L.T("Состояние компьютера и программы");
+                UpdateHeaderHeight();
+                BuildHome();
+                return;
+            }
             if (id == "battery")
             {
                 hTitle.Text = L.T("Аккумулятор");
@@ -769,6 +794,7 @@ namespace FoxideDisk
         public void SelectTab(int i)
         {
             if (busy) return;
+            if (started && tab != i) Telemetry.Count("tab." + TabIds[Math.Max(0, Math.Min(TabIds.Length - 1, i))]);
             tab = i;
             for (int k = 0; k < tabs.Count; k++) tabs[k].Selected = k == i;
             BuildPage();
@@ -1163,6 +1189,7 @@ namespace FoxideDisk
                 try
                 {
                     int sizeMb = Settings.TestSizeMB, secs = Settings.RandomSeconds;
+                    Telemetry.Count("action.speed_test");
                     var res = await Task.Run(() => SpeedTest.Run(letter, sizeMb, secs, report, token));
                     speedResults[disk.Signature] = res;
                     show(res);
@@ -1477,6 +1504,7 @@ namespace FoxideDisk
                 {
                     code = await Task.Run(() =>
                     {
+                        Telemetry.Count("action.wipe");
                         var fresh = Wiper.Reverify(d);
                         return Wiper.Run(fresh, o, append, progress);
                     });
@@ -1771,6 +1799,7 @@ namespace FoxideDisk
                 if (run != null) return;
                 limit = durs[cDur.SelectedIndex];
                 chart.Points.Clear();
+                Telemetry.Count("action.cpu_stress");
                 run = new CpuStress();
                 run.Start(thr[cThr.SelectedIndex]);
                 clock.Restart(); lastIter = 0; lastT = 0;
@@ -1891,6 +1920,7 @@ namespace FoxideDisk
                 limit = durs[cDur.SelectedIndex];
                 chart.Points.Clear();
                 running = true;
+                Telemetry.Count("action.gpu_stress");
                 view.StartRender();
                 clock.Restart();
                 StressBusy(true);
@@ -1995,6 +2025,7 @@ namespace FoxideDisk
             {
                 if (!FxMessage.Confirm(this, L.T("Проверка памяти Windows"),
                     L.T("Откроется окно «Средство проверки памяти Windows». В нём выберите «Выполнить перезагрузку и проверку» или «Выполнить проверку при следующем включении». Перед перезагрузкой сохраните открытые документы."), L.T("Открыть средство"), false)) return;
+                Telemetry.Count("action.mem_diag");
                 try { RamService.StartWindowsDiagnostic(); }
                 catch (Exception ex) { FxMessage.Show(this, ex.Message, L.T("Проверка памяти Windows"), MessageBoxButtons.OK, MessageBoxIcon.Error); }
             };
@@ -2100,6 +2131,7 @@ namespace FoxideDisk
                 };
                 append(L.F("Начало проверки: {0}, проходов: {1}, потоков: {2}", DiskService.FormatSize((ulong)bytes), passes, Environment.ProcessorCount));
                 RamTestResult res;
+                Telemetry.Count("action.ram_test");
                 try { res = await Task.Run(() => RamTest.Run(bytes, passes, report, append, token)); }
                 catch (Exception ex) { res = null; append(L.T("ОШИБКА:") + " " + ex.Message); }
                 await Task.Delay(150);
@@ -2127,6 +2159,7 @@ namespace FoxideDisk
 
         void OpenVolume(char letter)
         {
+            Telemetry.Count("action.open_volume");
             try { VolumeOps.Open(letter); }
             catch (Exception ex)
             {
@@ -2148,6 +2181,7 @@ namespace FoxideDisk
             {
                 char newLetter;
                 if (!FxMessage.AskLetter(this, p, out newLetter)) return;
+                Telemetry.Count("action.change_letter");
                 op = () => VolumeOps.ChangeLetter(d.Number, p, newLetter);
                 title = L.T("Изменение буквы");
             }
@@ -2157,6 +2191,7 @@ namespace FoxideDisk
                 if (p.IsService)
                     text += "\n\n" + L.F("Это служебный раздел ({0}). Удаляйте его, только если диск больше не будет загрузочным или не нужен раздел восстановления.", p.Type);
                 if (!FxMessage.Confirm(this, L.T("Удалить том?"), text, L.T("Удалить том"), true)) return;
+                Telemetry.Count("action.delete_partition");
                 op = () => VolumeOps.Delete(d, p);
                 title = L.T("Удаление тома");
             }
@@ -2180,6 +2215,7 @@ namespace FoxideDisk
             card.Ejecting = true;
             card.Invalidate();
             string err;
+            Telemetry.Count("action.eject");
             try { err = await Task.Run(() => Ejector.Eject(d.Number)); }
             catch (Exception ex) { err = ex.Message; }
             card.Ejecting = false;
@@ -2383,8 +2419,8 @@ namespace FoxideDisk
             var about = Card(L.T("О программе"));
             var ver = typeof(MainForm).Assembly.GetName().Version;
             about.Controls.Add(new TextBlock("Foxide Helper " + ver.Major + "." + ver.Minor + "." + ver.Build, TStyle.Bold));
-            about.Controls.Add(new TextBlock(L.T("Портативная утилита: проверка состояния дисков, тест скорости и полная очистка с удалением всех разделов. Установка не нужна — достаточно одного файла FoxideHelper.exe."), TStyle.Muted));
-            about.Controls.Add(new TextBlock(L.T("Файл настроек:") + " " + (Settings.FilePath ?? L.T("не удалось сохранить")), TStyle.Small));
+            about.Controls.Add(new TextBlock(L.T("Портативная утилита для дисков, памяти, процессора, видеокарты, аккумулятора и охлаждения. Установка не нужна — достаточно одного файла FoxideHelper.exe."), TStyle.Muted));
+            about.Controls.Add(new TextBlock(L.T("Папка данных (настройки, отчёты):") + " " + (Settings.DataDir ?? L.T("не удалось создать")), TStyle.Small));
             var restart = new FlatButton(L.T("Перезапустить программу"), BtnKind.Secondary, "");
             restart.Click += (s, e) => RestartApp();
             var folder = new FlatButton(L.T("Открыть папку программы"), BtnKind.Ghost, "");
@@ -2392,7 +2428,9 @@ namespace FoxideDisk
             {
                 try { Process.Start("explorer.exe", "/select,\"" + Application.ExecutablePath + "\""); } catch { }
             };
-            about.Controls.Add(new Row { MinHeight = 38 }.Add(restart, 250).Add(folder, 250).Add(new Panel(), -1));
+            var data = new FlatButton(L.T("Открыть папку данных"), BtnKind.Ghost, "\uE8B7");
+            data.Click += (s, e) => { try { if (Settings.DataDir != null) Process.Start("explorer.exe", "\"" + Settings.DataDir + "\""); } catch { } };
+            about.Controls.Add(new Row { MinHeight = 38 }.Add(restart, 250).Add(folder, 250).Add(data, 250).Add(new Panel(), -1));
             page.Controls.Add(about);
 
             var upd = Card(L.T("Обновления"));
@@ -2400,11 +2438,9 @@ namespace FoxideDisk
             tUpd.CheckedChanged += (s, e) => { Settings.CheckUpdates = tUpd.Checked; Settings.Save(); };
             var checkNow = new FlatButton(L.T("Проверить обновления"), BtnKind.Secondary, "");
             checkNow.Click += (s, e) => CheckForUpdates(true);
-            var releases = new FlatButton(L.T("Все версии на GitHub"), BtnKind.Ghost, "");
-            releases.Click += (s, e) => OpenUrl(RepoUrl + "/releases");
             updStatus = new TextBlock(updLast ?? L.F("Текущая версия {0}.", Updater.CurrentText), TStyle.Muted);
             upd.Controls.Add(tUpd);
-            upd.Controls.Add(new Row { MinHeight = 38 }.Add(checkNow, 250).Add(releases, 250).Add(new Panel(), -1));
+            upd.Controls.Add(new Row { MinHeight = 38 }.Add(checkNow, 250).Add(new Panel(), -1));
             upd.Controls.Add(updStatus);
             upd.Controls.Add(new TextBlock(L.T("Обновления скачиваются из релизов GitHub-репозитория программы. Перед установкой проверяются размер и контрольная сумма SHA-256 файла."), TStyle.Small));
             page.Controls.Add(upd);
@@ -2413,15 +2449,15 @@ namespace FoxideDisk
             var tStats = new Toggle(L.T("Отправлять анонимную статистику и отчёты о сбоях"), Settings.SendStats);
             tStats.CheckedChanged += (s, e) => { Settings.SendStats = tStats.Checked; Settings.Save(); if (!tStats.Checked) Telemetry.DropPending(); };
             stats.Controls.Add(tStats);
-            stats.Controls.Add(new TextBlock(L.T("Раз в день программа сообщает Foxide Studio версию программы и Windows, язык, число запусков и какими разделами пользовались, а при сбое — текст ошибки. Имени ПК, имени пользователя, серийных номеров и сведений о дисках в отчётах нет: копия программы отличается только случайным номером, созданным при первом запуске."), TStyle.Small));
+            stats.Controls.Add(new TextBlock(L.T("Раз в день программа сообщает Foxide Studio версию программы и Windows, язык, число запусков, какими разделами и функциями пользовались, какие настройки включены и общие сведения о железе (сколько дисков каждого типа, производитель видеокарты, объём памяти, есть ли батарея), а при сбое — текст ошибки. Имени ПК, имени пользователя, моделей, серийных номеров и содержимого дисков в отчётах нет: копия программы отличается только случайным номером, созданным при первом запуске."), TStyle.Small));
             page.Controls.Add(stats);
 
             var support = Card(L.T("Поддержать проект"));
             support.Controls.Add(new TextBlock(L.T("Foxide Helper бесплатный и с открытым исходным кодом. Если программа вам помогла, поддержите разработку на Patreon."), TStyle.Muted));
             var bPat = new FlatButton(L.T("Поддержать на Patreon"), BtnKind.Primary, "");
-            bPat.Click += (s, e) => OpenUrl(PatreonUrl);
+            bPat.Click += (s, e) => { Telemetry.Count("action.patreon_settings"); OpenUrl(PatreonUrl); };
             var bGit = new FlatButton(L.T("Исходный код на GitHub"), BtnKind.Ghost, "");
-            bGit.Click += (s, e) => OpenUrl(RepoUrl);
+            bGit.Click += (s, e) => { Telemetry.Count("action.github"); OpenUrl(RepoUrl); };
             support.Controls.Add(new Row { MinHeight = 38 }.Add(bPat, 250).Add(bGit, 250).Add(new Panel(), -1));
             page.Controls.Add(support);
 

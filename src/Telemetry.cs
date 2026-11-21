@@ -23,6 +23,27 @@ namespace FoxideDisk
         static readonly Dictionary<string, int> counters = new Dictionary<string, int>(StringComparer.Ordinal);
 
         /// <summary>Called once the main window is up.</summary>
+        /// <summary>Anonymous hardware summary from the UI (disk kinds count, GPU vendor, battery yes/no) — no models or serials.</summary>
+        public static Func<Dictionary<string, object>> Context;
+
+        /// <summary>Which options are switched on — to see what people actually use. Only on/off values and choices, no paths.</summary>
+        static Dictionary<string, object> SettingsSnapshot()
+        {
+            var d = new Dictionary<string, object>
+            {
+                { "theme", Settings.ThemeMode == 1 ? "light" : Settings.ThemeMode == 2 ? "dark" : "system" },
+                { "live_temp", Settings.LiveTemp }, { "temp_interval", Settings.TempIntervalSec },
+                { "temp_alerts", Settings.TempAlerts }, { "alert_ssd", Settings.AlertSsd }, { "alert_hdd", Settings.AlertHdd },
+                { "alert_poll_hdd", Settings.AlertPollHdd }, { "minimize_to_tray", Settings.MinimizeToTray },
+                { "tray_sensors", Settings.TraySensors }, { "tray_battery", Settings.TrayBattery },
+                { "check_updates", Settings.CheckUpdates }, { "show_virtual", Settings.ShowVirtual }, { "auto_refresh", Settings.AutoRefresh },
+                { "sidebar_collapsed", Settings.SidebarCollapsed }, { "quick_format", Settings.QuickFormat },
+                { "default_fs", Settings.DefaultFs }, { "default_style", Settings.DefaultStyle },
+            };
+            try { d["autostart"] = Autostart.IsEnabled(); } catch { }
+            return d;
+        }
+
         /// <summary>Diagnostic runs (--shot / --dump) send nothing.</summary>
         public static bool Off;
 
@@ -86,6 +107,8 @@ namespace FoxideDisk
             var r = Common();
             r["launches"] = Settings.Launches;
             r["counters"] = snap;
+            r["settings"] = SettingsSnapshot();
+            try { var ctx = Context != null ? Context() : null; if (ctx != null) r["hw"] = ctx; } catch { }
             if (!Post("stats/ping", r)) return;
             lock (sync)
             {
@@ -167,9 +190,8 @@ namespace FoxideDisk
         // ---------------------------------------------------------------- storage
         static string Dir(string name)
         {
-            string baseDir = Settings.FilePath != null ? Path.GetDirectoryName(Settings.FilePath)
-                : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FoxideDisk");
-            string d = Path.Combine(baseDir, "FoxideHelper." + name);
+            string baseDir = Settings.DataDir ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Foxide Helper");
+            string d = Path.Combine(baseDir, name);
             Directory.CreateDirectory(d);
             return d;
         }

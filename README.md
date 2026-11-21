@@ -13,11 +13,16 @@ It can fully wipe a disk, removing **all** partitions including EFI, MSR, OEM an
 ## Getting started
 Download `FoxideHelper.exe` from [Releases](https://github.com/Foxide-Studio/foxide-helper/releases) and run it — no installation needed
 (it uses the .NET Framework 4.x built into Windows). The program asks for administrator rights: without them Windows does not expose SMART
-data and does not allow repartitioning. Settings are stored in `FoxideHelper.ini` next to the exe (or in `%AppData%\FoxideDisk` if that folder is read-only).
+data and does not allow repartitioning. Settings and pending reports are kept in `Documents\Foxide Helper` (or `%AppData%\Foxide Helper` if Documents is not writable) —
+nothing is written next to the exe. Files of older versions are moved there automatically.
 
 The interface is available in **English** and **Russian** (Settings → Appearance → Language).
 
 ## Features
+### Home
+The start page shows every module as a widget with its current state — disks (health, hottest disk), memory load, CPU and GPU
+temperature, battery, cooling, background mode, updates and statistics. Click a widget to open the module.
+
 ### Disks
 - **Grouped by type:** all disks, SSD (incl. NVMe), HDD, USB drives and memory cards, other / virtual.
 - **Overview:** model, serial number, firmware, interface, partition style, sectors, partition map and used space.
@@ -56,9 +61,11 @@ The running exe is renamed to `.old`, the new one takes its place and starts; le
 ## Privacy: anonymous statistics and crash reports
 Unless turned off in Settings → Statistics and crash reports, once a day the program sends to Foxide Studio
 (`hub.foxidestudio.com/api/foxidehelper/`): a random id created on first start (not tied to the hardware), program and Windows version,
-interface language and Windows locale, number of launches and which sections were opened. After a crash it sends the error type,
+interface language and Windows locale, number of launches, which sections, tabs and features were used (e.g. "speed test", "CPU stress test"), which options are
+switched on (theme, temperature alerts, autostart, tray items…) and a general hardware summary (how many SSD / HDD / USB disks,
+GPU vendor, amount of RAM, whether there is a battery). After a crash it sends the error type,
 message and stack trace, with the user profile path, user name and PC name masked.
-**No PC name, user name, serial numbers or disk data are sent, and the server does not store IP addresses.**
+**No PC name, user name, device models, serial numbers or disk contents are sent, and the server does not store IP addresses.**
 The code is in [`src/Telemetry.cs`](src/Telemetry.cs).
 
 ## Building

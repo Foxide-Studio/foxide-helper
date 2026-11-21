@@ -164,6 +164,7 @@ namespace FoxideDisk
                 string err;
                 if (!test.Start(opt, out err)) { FxMessage.Show(this, err, L.T("Проверка разрядом"), MessageBoxButtons.OK, MessageBoxIcon.Information); return; }
                 batTest = test;
+                Telemetry.Count("action.battery_test_" + (opt.Load == BatteryLoad.None ? "idle" : opt.Load == BatteryLoad.Cpu ? "cpu" : "cpu_gpu"));
                 if (opt.Load == BatteryLoad.CpuGpu) StartGpuLoadForBattery();
                 running(true);
                 status.Text = L.T("Запуск…");

@@ -38,22 +38,69 @@ namespace FoxideDisk
 
         public static string FilePath;
 
+        /// <summary>Folder with settings, pending crash reports and usage counters: Documents\Foxide Helper
+        /// (or %AppData%\Foxide Helper if Documents is not writable). Nothing is written next to the exe.</summary>
+        public static string DataDir;
+
         static string ResolvePath()
         {
-            string exeDir = Path.GetDirectoryName(Application.ExecutablePath);
-            string local = Path.Combine(exeDir, "FoxideHelper.ini");
-            string old = Path.Combine(exeDir, "FoxideDisk.ini");   // settings of the app before the rename
-            try { if (!File.Exists(local) && File.Exists(old)) File.Move(old, local); } catch { }
-            try
+            string dir = null;
+            foreach (var root in new[] { Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
+                                         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) })
             {
-                using (new FileStream(local, FileMode.OpenOrCreate, FileAccess.ReadWrite)) { }
-                return local;
+                if (string.IsNullOrEmpty(root)) continue;
+                try
+                {
+                    string d = Path.Combine(root, "Foxide Helper");
+                    Directory.CreateDirectory(d);
+                    string probe = Path.Combine(d, ".write-test");
+                    File.WriteAllText(probe, "");
+                    File.Delete(probe);
+                    dir = d;
+                    break;
+                }
+                catch { }
             }
-            catch
+            if (dir == null) throw new IOException("no writable data folder");
+            DataDir = dir;
+            string ini = Path.Combine(dir, "settings.ini");
+            Migrate(ini);
+            using (new FileStream(ini, FileMode.OpenOrCreate, FileAccess.ReadWrite)) { }
+            return ini;
+        }
+
+        /// <summary>Versions up to 1.1.9 kept FoxideHelper.ini, FoxideHelper.crashes and FoxideHelper.stats next to the exe
+        /// (or in %AppData%\FoxideDisk). Move them into the data folder once.</summary>
+        static void Migrate(string ini)
+        {
+            string exeDir = Path.GetDirectoryName(Application.ExecutablePath);
+            string oldApp = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FoxideDisk");
+            foreach (var baseDir in new[] { exeDir, oldApp })
             {
-                string dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "FoxideDisk");
-                Directory.CreateDirectory(dir);
-                return Path.Combine(dir, "FoxideHelper.ini");
+                try
+                {
+                    foreach (var name in new[] { "FoxideHelper.ini", "FoxideDisk.ini" })
+                    {
+                        string f = Path.Combine(baseDir, name);
+                        if (!File.Exists(f)) continue;
+                        if (!File.Exists(ini)) File.Move(f, ini); else File.Delete(f);
+                    }
+                    foreach (var sub in new[] { "crashes", "stats" })
+                    {
+                        string from = Path.Combine(baseDir, "FoxideHelper." + sub);
+                        if (!Directory.Exists(from)) continue;
+                        string to = Path.Combine(DataDir, sub);
+                        Directory.CreateDirectory(to);
+                        foreach (var f in Directory.GetFiles(from))
+                        {
+                            string t = Path.Combine(to, Path.GetFileName(f));
+                            if (!File.Exists(t)) File.Move(f, t); else File.Delete(f);
+                        }
+                        Directory.Delete(from, true);
+                    }
+                    if (baseDir == oldApp && Directory.Exists(oldApp) && Directory.GetFileSystemEntries(oldApp).Length == 0) Directory.Delete(oldApp);
+                }
+                catch { }
             }
         }
 

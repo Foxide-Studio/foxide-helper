@@ -12,8 +12,8 @@ using System.Windows.Forms;
 [assembly: AssemblyDescription("Disk, memory and CPU/GPU toolkit for Windows")]
 [assembly: AssemblyCompany("Foxide Studio")]
 [assembly: AssemblyCopyright("© 2026 Foxide Studio")]
-[assembly: AssemblyVersion("1.1.9.0")]
-[assembly: AssemblyFileVersion("1.1.9.0")]
+[assembly: AssemblyVersion("1.1.14.0")]
+[assembly: AssemblyFileVersion("1.1.14.0")]
 
 namespace FoxideDisk
 {

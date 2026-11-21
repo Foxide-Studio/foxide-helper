@@ -13,6 +13,7 @@ namespace FoxideDisk
         HwSensorsLive hw;                 // created lazily on a worker thread; Poll() runs every few seconds
         System.Threading.Timer hwTimer;
         string trayBatteryLine;
+        BatteryInfo hwBattery;
         int hwPolling;
 
         /// <summary>Start background polling (sensors for the tray menu and the Cooling page). Cheap after the first poll.</summary>
@@ -27,6 +28,7 @@ namespace FoxideDisk
                     if (hw == null) hw = new HwSensorsLive();
                     hw.Poll();
                     trayBatteryLine = Settings.TrayBattery && BatteryService.HasBattery ? BatteryService.TrayLine() : null;
+                    if (BatteryService.HasBattery) hwBattery = BatteryService.Combined(BatteryService.Query());
                 }
                 catch { }
                 finally { Interlocked.Exchange(ref hwPolling, 0); }
@@ -175,6 +177,7 @@ namespace FoxideDisk
                             {
                                 var hh = hw; if (hh == null) return;
                                 string why; int p = pcts[mode.SelectedIndex];
+                                Telemetry.Count(p == 0 ? "action.fan_auto" : "action.fan_manual");
                                 bool ok = p == 0 ? hh.ResetGpuFan(ff.GpuIndex, ff.FanIndex, out why) : hh.SetGpuFanPercent(ff.GpuIndex, ff.FanIndex, p, out why);
                                 if (!ok) FxMessage.Show(this, L.T("Драйвер не позволил изменить скорость вентилятора.") + (string.IsNullOrEmpty(why) ? "" : "\n\n" + why), L.T("Охлаждение"), MessageBoxButtons.OK, MessageBoxIcon.Information);
                             };

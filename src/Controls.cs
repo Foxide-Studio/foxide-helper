@@ -357,13 +357,13 @@ namespace FoxideDisk
             switch (Kind)
             {
                 case BtnKind.Primary:
-                    bg = down ? Theme.Mix(P.Accent, Color.Black, .12f) : hover ? P.AccentHover : P.Accent; fg = P.AccentText; break;
+                    bg = down ? Theme.Mix(P.Accent, Color.Black, .12f) : hover ? P.AccentHover : P.Accent; fg = P.AccentText; border = Theme.Mix(P.Accent, Color.Black, .22f); break;
                 case BtnKind.Danger:
-                    bg = down ? Theme.Mix(P.Danger, Color.Black, .15f) : hover ? Theme.Mix(P.Danger, Color.White, .1f) : P.Danger; fg = Color.White; break;
+                    bg = down ? Theme.Mix(P.Danger, Color.Black, .15f) : hover ? Theme.Mix(P.Danger, Color.White, .1f) : P.Danger; fg = Color.White; border = Theme.Mix(P.Danger, Color.Black, .22f); break;
                 case BtnKind.Secondary:
-                    bg = hover ? Theme.Mix(P.Surface2, P.Text, .06f) : P.Surface2; border = P.Border; break;
+                    bg = hover ? Theme.Mix(P.Surface2, P.Text, .06f) : P.Surface2; border = hover ? Theme.Mix(P.Border, P.Text, .25f) : P.Border; break;
                 case BtnKind.Ghost:
-                    if (hover) bg = P.Surface2; break;
+                    if (hover) bg = P.Surface2; border = hover ? Theme.Mix(P.Border, P.Text, .25f) : P.Border; break;
                 case BtnKind.Nav:
                     if (selected) bg = Theme.Mix(BackColor, P.Accent, P.Dark ? .16f : .12f);
                     else if (hover) bg = Theme.Mix(BackColor, P.Text, .06f);
