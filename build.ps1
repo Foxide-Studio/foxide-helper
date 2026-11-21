@@ -24,8 +24,10 @@ if ($LASTEXITCODE) { throw 'IconMaker build failed' }
 & "$obj\IconMaker.exe" "$obj\app.ico"
 
 # 2) application
-$files = @(Get-ChildItem $src -Filter *.cs) + @(Get-ChildItem (Join-Path $src 'lang') -Filter *.cs) | ForEach-Object FullName
-& $csc @common @refs /unsafe /target:winexe /out:"$exe" /win32icon:"$obj\app.ico" /win32manifest:"$src\app.manifest" $files
+$files = @(Get-ChildItem $src -Filter *.cs) + @(Get-ChildItem (Join-Path $src 'lang') -Filter *.cs) + @(Get-ChildItem (Join-Path $src 'Pawn') -Filter *.cs) | ForEach-Object FullName
+# signed PawnIO modules (LGPL-2.1, third_party\pawnio-modules) embedded as resources PawnIO.<name>.bin
+$res = Get-ChildItem (Join-Path $root 'third_party\pawnio-modules') -Filter *.bin | ForEach-Object { '/resource:' + $_.FullName + ',PawnIO.' + $_.Name }
+& $csc @common @refs /unsafe /target:winexe /out:"$exe" /win32icon:"$obj\app.ico" /win32manifest:"$src\app.manifest" $res $files
 if ($LASTEXITCODE) { throw 'FoxideHelper build failed' }
 if ($Out) {
     $hash = (Get-FileHash $exe -Algorithm SHA256).Hash.ToLower()
@@ -35,7 +37,7 @@ if ($Out) {
 # 3) optional non-elevated test build (for --dump / --shot diagnostics)
 if ($Test) {
     (Get-Content "$src\app.manifest" -Raw) -replace 'requireAdministrator','asInvoker' | Set-Content "$obj\test.manifest" -Encoding UTF8
-    & $csc @common @refs /unsafe /target:winexe /out:"$obj\FoxideDisk.test.exe" /win32icon:"$obj\app.ico" /win32manifest:"$obj\test.manifest" $files
+    & $csc @common @refs /unsafe /target:winexe /out:"$obj\FoxideDisk.test.exe" /win32icon:"$obj\app.ico" /win32manifest:"$obj\test.manifest" $res $files
     if ($LASTEXITCODE) { throw 'test build failed' }
 }
 Get-Item $exe | Select-Object FullName, @{n='KB';e={[math]::Round($_.Length/1KB)}}, @{n='Version';e={$_.VersionInfo.FileVersion}}

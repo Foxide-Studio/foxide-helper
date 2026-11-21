@@ -72,8 +72,12 @@ namespace FoxideDisk
         }
 
         /// <summary>Highest ACPI thermal-zone temperature (°C) — usually the CPU package / board sensor.</summary>
+        /// <summary>Set by the UI when the PawnIO driver gives a real CPU temperature; preferred over ACPI zones.</summary>
+        public static Func<double?> ExternalTemp;
+
         public double? Temperature()
         {
+            try { var f = ExternalTemp; if (f != null) { var v = f(); if (v.HasValue) return v; } } catch { }
             double best = double.NaN;
             foreach (var z in zones)
             {

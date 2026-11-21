@@ -32,7 +32,7 @@ namespace FoxideDisk
         static void Build()
         {
             var d = new Dictionary<string, string>(StringComparer.Ordinal);
-            foreach (var t in new[] { EnCore, EnMainForm, EnViews, EnServices, EnHardware, EnBattery })
+            foreach (var t in new[] { EnCore, EnMainForm, EnViews, EnServices, EnHardware, EnBattery, EnPawnCpu, EnPawnBoard, EnPawnMem })
                 for (int i = 0; i + 1 < t.Length; i += 2) d[t[i]] = t[i + 1];
             en = d;
         }

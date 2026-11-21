@@ -581,6 +581,12 @@ namespace FoxideDisk
                 m.Result = IntPtr.Zero;
                 return;
             }
+            if ((m.Msg == 0x0317 || m.Msg == 0x0318) && DropDownStyle == ComboBoxStyle.DropDownList && m.WParam != IntPtr.Zero)   // WM_PRINT / WM_PRINTCLIENT (DrawToBitmap)
+            {
+                using (var g = Graphics.FromHdc(m.WParam)) PaintAll(g);
+                m.Result = IntPtr.Zero;
+                return;
+            }
             if (m.Msg == 0x0014 && DropDownStyle == ComboBoxStyle.DropDownList) { m.Result = (IntPtr)1; return; }   // WM_ERASEBKGND
             base.WndProc(ref m);
             if (m.Msg == 0x0085) PaintChrome();

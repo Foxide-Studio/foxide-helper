@@ -15,17 +15,20 @@ namespace FoxideDisk
     public static class Demo
     {
         public static bool On;
+        public static bool OpenSensors;
+        public static string Lang;               // --lang=ru|en for screenshots          // --open-sensors: "All sensors" cards expanded for the shot
         public static int ScrollY;               // --scroll=N: scroll the page before the shot
         public const string GpuName = "NVIDIA GeForce RTX 4070";
         const ulong GB = 1000UL * 1000 * 1000, GiB = 1UL << 30, MiB = 1UL << 20;
 
         public static void PrepareSettings()
         {
-            L.Lang = "en";
+            L.Lang = Lang == "ru" ? "ru" : "en";
             var en = System.Globalization.CultureInfo.GetCultureInfo("en-US");
             System.Threading.Thread.CurrentThread.CurrentCulture = en;
             System.Globalization.CultureInfo.DefaultThreadCurrentCulture = en;
             Settings.FilePath = null;               // never write the user's ini
+            Settings.HomeSensors = Environment.GetEnvironmentVariable("FH_HOME_SENSORS") ?? "";
             Settings.LiveTemp = true; Settings.TempWindowMin = 10; Settings.TempIntervalSec = 2;
             Settings.SidebarCollapsed = false; Settings.ShowVirtual = false; Settings.CollapsedCards.Clear();
             Settings.CheckUpdates = true; Settings.SendStats = true; Settings.TempAlerts = true; Settings.MinimizeToTray = false;

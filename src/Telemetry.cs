@@ -60,7 +60,7 @@ namespace FoxideDisk
         /// <summary>Usage counter, e.g. "section.ram" or "action.speedtest". Sent with the next daily report.</summary>
         public static void Count(string name)
         {
-            if (Off || !Settings.SendStats) return;
+            if (Off || Demo.On || !Settings.SendStats) return;
             lock (sync)
             {
                 int n; counters.TryGetValue(name, out n);
@@ -190,7 +190,9 @@ namespace FoxideDisk
         // ---------------------------------------------------------------- storage
         static string Dir(string name)
         {
-            string baseDir = Settings.DataDir ?? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Foxide Helper");
+            string baseDir = Settings.DataDir;
+            if (string.IsNullOrEmpty(baseDir) || !Path.IsPathRooted(baseDir))
+                baseDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Foxide Helper");
             string d = Path.Combine(baseDir, name);
             Directory.CreateDirectory(d);
             return d;

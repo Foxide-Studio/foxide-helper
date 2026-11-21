@@ -33,6 +33,9 @@ namespace FoxideDisk
         public static int Launches = 0;              // launches since the last report
         public static bool TraySensors = true;       // tray menu: CPU / GPU / RAM temperatures
         public static bool TrayBattery = true;       // tray menu: battery charge and health
+        public static string HomeSensors = "";        // Home → "My sensors": page|group|name;;page|group|name
+        public static bool PawnOfferOff = false;     // "don't offer" on the driver install card
+        public static bool UsePawnIo = true;         // use the PawnIO driver for CPU / board / memory sensors when it is installed
         public static string SkipVersion = "";       // "skip this version" in the update dialog
         public static readonly HashSet<string> CollapsedCards = new HashSet<string>();
 
@@ -48,7 +51,7 @@ namespace FoxideDisk
             foreach (var root in new[] { Environment.GetFolderPath(Environment.SpecialFolder.MyDocuments),
                                          Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData) })
             {
-                if (string.IsNullOrEmpty(root)) continue;
+                if (string.IsNullOrEmpty(root) || !Path.IsPathRooted(root)) continue;
                 try
                 {
                     string d = Path.Combine(root, "Foxide Helper");
@@ -141,6 +144,9 @@ namespace FoxideDisk
                 Launches = Int(d, "Launches", 0, 0, 100000);
                 TraySensors = Bool(d, "TraySensors", TraySensors);
                 TrayBattery = Bool(d, "TrayBattery", TrayBattery);
+                UsePawnIo = Bool(d, "UsePawnIo", UsePawnIo);
+                PawnOfferOff = Bool(d, "PawnOfferOff", PawnOfferOff);
+                HomeSensors = Str(d, "HomeSensors", "");
                 SkipVersion = Str(d, "SkipVersion", "");
                 CollapsedCards.Clear();
                 foreach (var k in Str(d, "CollapsedCards", "").Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries))
@@ -182,6 +188,9 @@ namespace FoxideDisk
                 sb.AppendLine("Launches=" + Launches);
                 sb.AppendLine("TraySensors=" + TraySensors);
                 sb.AppendLine("TrayBattery=" + TrayBattery);
+                sb.AppendLine("UsePawnIo=" + UsePawnIo);
+                sb.AppendLine("PawnOfferOff=" + PawnOfferOff);
+                sb.AppendLine("HomeSensors=" + HomeSensors);
                 sb.AppendLine("SkipVersion=" + SkipVersion);
                 sb.AppendLine("CollapsedCards=" + string.Join(",", CollapsedCards));
                 File.WriteAllText(FilePath, sb.ToString(), Encoding.UTF8);

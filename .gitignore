@@ -7,3 +7,6 @@ FoxideHelper.crashes/
 FoxideHelper.stats/
 __pycache__/
 dist/
+stats/
+crashes/
+screenshots/

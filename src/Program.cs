@@ -12,8 +12,8 @@ using System.Windows.Forms;
 [assembly: AssemblyDescription("Disk, memory and CPU/GPU toolkit for Windows")]
 [assembly: AssemblyCompany("Foxide Studio")]
 [assembly: AssemblyCopyright("© 2026 Foxide Studio")]
-[assembly: AssemblyVersion("1.1.14.0")]
-[assembly: AssemblyFileVersion("1.1.14.0")]
+[assembly: AssemblyVersion("1.2.4.0")]
+[assembly: AssemblyFileVersion("1.2.4.0")]
 
 namespace FoxideDisk
 {
@@ -47,9 +47,21 @@ namespace FoxideDisk
                 foreach (var a in args) if (a.StartsWith("--scroll=")) int.TryParse(a.Substring(9), out Demo.ScrollY);
                 args = Array.FindAll(args, a => a != "--demo" && !a.StartsWith("--scroll="));
             }
+            // --shot also accepts --scroll=N and --open-sensors (expand "All sensors") without --demo
+            if (args.Length >= 2 && args[0] == "--shot")
+            {
+                foreach (var a in args)
+                {
+                    if (a.StartsWith("--scroll=")) int.TryParse(a.Substring(9), out Demo.ScrollY);
+                    if (a == "--open-sensors") Demo.OpenSensors = true;
+                    if (a.StartsWith("--lang=")) Demo.Lang = a.Substring(7);
+                }
+                args = Array.FindAll(args, a => !a.StartsWith("--scroll=") && a != "--open-sensors" && !a.StartsWith("--lang="));
+            }
             Theme.Init(scale);
             Settings.Load();
             L.Lang = Settings.Language;
+            if (Demo.Lang == "ru" || Demo.Lang == "en") L.Lang = Demo.Lang;
             if (Demo.On) Demo.PrepareSettings();
             Theme.Set(Settings.ThemeMode);
 
@@ -158,11 +170,13 @@ namespace FoxideDisk
                 {
                     t.Stop();
                     Application.DoEvents();
+                    if (section == "picker") { f.ShotPicker(args[1]); f.Close(); return; }
                     if (Demo.On)
                     {
                         if (Demo.ScrollY > 0) { f.ScrollPage(Demo.ScrollY); Application.DoEvents(); }
                         Demo.Save(f, args[1]); f.Close(); return;
                     }
+                    if (Demo.ScrollY > 0) { f.ScrollPage(Demo.ScrollY); Application.DoEvents(); }
                     using (var bmp = new Bitmap(f.Width, f.Height))
                     {
                         f.DrawToBitmap(bmp, new Rectangle(0, 0, f.Width, f.Height));

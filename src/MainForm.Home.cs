@@ -51,6 +51,7 @@ namespace FoxideDisk
                 })));
             }
 
+            var offer = PawnOfferCard(); if (offer != null) page.Controls.Add(offer);
             var sys = Card(L.T("Компьютер"));
             var g1 = new TileGrid { MinTile = 230, TileH = 104 };
             var tDisks = HomeTile(g1, L.T("Диски"), "", "all");
@@ -62,6 +63,7 @@ namespace FoxideDisk
             var tFan = HomeTile(g1, L.T("Охлаждение"), "", "cooling");
             sys.Controls.Add(g1);
             page.Controls.Add(sys);
+            page.Controls.Add(HomeSensorsCard());
 
             var app = Card(L.T("Программа"));
             var g2 = new TileGrid { MinTile = 230, TileH = 104 };
@@ -98,7 +100,7 @@ namespace FoxideDisk
                 tRam.ValueColor = () => load >= 90 ? Theme.P.Danger : load >= 75 ? Theme.P.Warning : Theme.P.Text;
                 // sensors
                 var h = hw;
-                double? ct = h != null ? h.CpuTempC : null;
+                double? ct = PawnCpuTemp ?? (h != null ? h.CpuTempC : null);
                 tCpu.Set(ct.HasValue ? ct.Value.ToString("0") + " °C" : "—", cpuNameCache);
                 tCpu.ValueColor = TempColor(ct, 80, 90);
                 var gl = h != null ? h.Gpus.FirstOrDefault() : null;
@@ -119,7 +121,10 @@ namespace FoxideDisk
                 if (h != null && h.LastPoll != DateTime.MinValue)
                 {
                     var withSpeed = h.Fans.Where(f => f.Rpm.HasValue || f.Percent.HasValue).ToList();
-                    tFan.Set(h.Fans.Count == 0 ? "—" : L.F("{0} шт.", h.Fans.Count),
+                    var bf = PawnOn ? pawnFans.Where(f => f.Rpm.HasValue && f.Rpm.Value > 0).ToList() : new List<BoardFan>();
+                    foreach (var b in bf) withSpeed.Insert(0, new FanInfo { Name = b.Name, Rpm = b.Rpm });
+                    int total = h.Fans.Count + (PawnOn ? pawnFans.Count : 0);
+                    tFan.Set(total == 0 ? "—" : L.F("{0} шт.", total),
                         withSpeed.Count > 0 ? string.Join(" · ", withSpeed.Take(2).Select(f => f.Rpm.HasValue ? L.F("{0} об/мин", f.Rpm.Value.ToString("N0")) : f.Percent.Value.ToString("0") + " %").ToArray())
                                             : L.T("Windows не сообщает о вентиляторах"));
                 }

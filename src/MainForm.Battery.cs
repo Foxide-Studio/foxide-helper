@@ -45,6 +45,7 @@ namespace FoxideDisk
             page.Controls.Add(tc);
 
             BuildBatteryTest(BatteryService.Combined(list));
+            page.Controls.Add(AllSensorsCard("battery", BatterySensorRows));
             EndPage();
         }
 

@@ -1682,8 +1682,14 @@ namespace FoxideDisk
                 EndPage();
                 return;
             }
-            if (kind == "cpu") BuildCpuStress();
+            if (kind == "cpu")
+            {
+                var offer = PawnOfferCard(); if (offer != null) page.Controls.Add(offer);
+                if (PawnIo.Available && Settings.UsePawnIo) page.Controls.Add(PawnCpuCard());
+                BuildCpuStress();
+            }
             else { BuildGpuInfo(); BuildGpuStress(); }
+            page.Controls.Add(kind == "cpu" ? AllSensorsCard("cpu", CpuSensorRows) : AllSensorsCard("gpu", GpuSensorRows));
             EndPage();
         }
 
@@ -1759,7 +1765,7 @@ namespace FoxideDisk
                 if (mhz > 0) tClock.Set(L.F("{0} ГГц", (mhz / 1000).ToString("0.00")), s.Info.MaxMHz > 0 ? L.F("базовая {0} ГГц", (s.Info.MaxMHz / 1000.0).ToString("0.00")) : null);
                 if (temp.HasValue)
                 {
-                    tTemp.Set(temp.Value.ToString("0") + " °C", L.T("датчик ACPI"));
+                    tTemp.Set(temp.Value.ToString("0") + " °C", CpuSensors.ExternalTemp != null && PawnCpuTemp.HasValue ? L.T("датчик процессора") : L.T("датчик ACPI"));
                     tTemp.ValueColor = () => temp >= 90 ? Theme.P.Danger : temp >= 80 ? Theme.P.Warning : Theme.P.Success;
                 }
                 tPerf.Set(gflops.ToString("0.0"), "GFLOPS (double)");
@@ -2044,6 +2050,7 @@ namespace FoxideDisk
                 }
                 page.PerformLayout();
             })));
+            page.Controls.Add(AllSensorsCard("ram", RamSensorRows));
             EndPage();
         }
 
@@ -2451,6 +2458,7 @@ namespace FoxideDisk
             stats.Controls.Add(tStats);
             stats.Controls.Add(new TextBlock(L.T("Раз в день программа сообщает Foxide Studio версию программы и Windows, язык, число запусков, какими разделами и функциями пользовались, какие настройки включены и общие сведения о железе (сколько дисков каждого типа, производитель видеокарты, объём памяти, есть ли батарея), а при сбое — текст ошибки. Имени ПК, имени пользователя, моделей, серийных номеров и содержимого дисков в отчётах нет: копия программы отличается только случайным номером, созданным при первом запуске."), TStyle.Small));
             page.Controls.Add(stats);
+            page.Controls.Add(SettingsPawnCard());
 
             var support = Card(L.T("Поддержать проект"));
             support.Controls.Add(new TextBlock(L.T("Foxide Helper бесплатный и с открытым исходным кодом. Если программа вам помогла, поддержите разработку на Patreon."), TStyle.Muted));
@@ -2467,6 +2475,7 @@ namespace FoxideDisk
         // ---------------------------------------------------------------- self-test hooks
         public void ForTest(string sectionId, int tabIndex)
         {
+            if (sectionId == "picker") { SelectSection("home"); return; }
             if (sectionId != null) SelectSection(sectionId);
             if (tabIndex >= 0 && Array.IndexOf(SystemSections, sectionId) < 0) SelectTab(tabIndex);
         }

@@ -31,7 +31,7 @@ def tables():
 def main():
     sys.stdout.reconfigure(encoding="utf-8")
     en = tables()
-    files = [pathlib.Path(a) for a in sys.argv[1:]] or sorted(SRC.glob("*.cs"))
+    files = [pathlib.Path(a) for a in sys.argv[1:]] or sorted(list(SRC.glob("*.cs")) + list(SRC.glob("Pawn/*.cs")))
     missing = unwrapped = badfmt = 0
     for f in files:
         text = f.read_text(encoding="utf-8-sig")

@@ -22,6 +22,10 @@ The interface is available in **English** and **Russian** (Settings → Appearan
 ### Home
 The start page shows every module as a widget with its current state — disks (health, hottest disk), memory load, CPU and GPU
 temperature, battery, cooling, background mode, updates and statistics. Click a widget to open the module.
+**My sensors:** pin any sensor from the component pages (a core temperature, a fan speed, GPU power…) as a live tile on Home.
+
+Every component page (CPU, GPU, memory, cooling, battery) ends with a foldable **All sensors** table: each value with its minimum
+and maximum since the program started.
 
 ### Disks
 - **Grouped by type:** all disks, SSD (incl. NVMe), HDD, USB drives and memory cards, other / virtual.
@@ -50,6 +54,25 @@ temperature, battery, cooling, background mode, updates and statistics. Click a 
   and battery charge / health (each can be turned off in Settings).
 - Disk overheating notifications with separate thresholds for SSD and HDD.
 - Light, dark and system theme; the disk list refreshes when USB devices are plugged in; high-DPI support.
+
+## Extended sensors (optional PawnIO driver)
+Windows does not let ordinary programs read CPU registers, the motherboard monitoring chip or the memory bus. For accurate CPU
+core temperatures and power, motherboard fan speeds, fan control and temperatures, and memory module temperature, Foxide Helper
+uses **[PawnIO](https://pawnio.eu)** — an open-source, digitally signed driver also used by LibreHardwareMonitor and FanControl.
+
+- Nothing is installed automatically. The Cooling page (and Settings → Extended sensors) offers **Install the PawnIO driver**: the official installer is downloaded
+  from [GitHub](https://github.com/namazso/PawnIO.Setup/releases), its SHA-256 and Authenticode signature are checked, then it runs.
+  It can be removed with **Remove the PawnIO driver** in Settings (or in Windows Settings → Apps); the program can also just stop using it.
+- The program talks to the driver only through its DeviceIoControl interface and loads the official signed modules
+  ([PawnIO.Modules](https://github.com/namazso/PawnIO.Modules), LGPL-2.1, shipped unmodified in [`third_party/pawnio-modules`](third_party/pawnio-modules)).
+  A module can only do what its signed code allows.
+- **CPU:** Intel package / per-core temperature (TjMax) and RAPL power; AMD Zen (Ryzen) Tctl/Tdie, CCD temperatures, package and core power, core clocks.
+- **Motherboard:** Nuvoton NCT677x/679x and ITE IT86xx/IT87xx chips — fan speeds, PWM, board temperatures, a few voltages;
+  manual fan speed with the original mode restored when you choose "automatic" or exit. Dell laptops via Dell SMM (read-only).
+- **Memory:** DDR4 temperature sensors (TSE2004) and DDR5 SPD hub (SPD5118) over SMBus, read-only. Many consumer modules have no sensor.
+- Bus access is serialized with the standard global mutexes used by HWiNFO / LibreHardwareMonitor, so they can run side by side.
+- Parts of the register maps were studied from [LibreHardwareMonitor](https://github.com/LibreHardwareMonitor/LibreHardwareMonitor);
+  files with ported tables (`src/Pawn/SuperIo*.cs`, `src/Pawn/PawnCpu.cs`) carry an MPL-2.0 header.
 
 ## Updates
 The program checks [GitHub Releases](https://github.com/Foxide-Studio/foxide-helper/releases) at start and shows a notice with
